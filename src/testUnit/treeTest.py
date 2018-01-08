@@ -13,5 +13,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
-import numpy as np
 
+import numpy
+import unittest
+from src.kdtree.tree import Tree
+
+class treeTestCase(unittest.TestCase):
+    def buildTreeTest(self):
+        self.assertEqual(True, False)
+
+if __name__ == '__main__':
+    unittest.main()
+
+    tree1 = Tree(3)
+    print(tree1.root)
