@@ -14,7 +14,7 @@
    limitations under the License.
 """
 from random import random
-
+from time import time
 import numpy as np
 
 import logging
@@ -187,30 +187,25 @@ class branch:
     def findNearestPoint(self, root, point):
         bestPoint = root.findPointSpace(root, point)
         # range
-        superSphere = [[min([bestPoint.coordinate[y],
-                             2 * point.coordinate[y] - bestPoint.coordinate[y]]),
-                        max([bestPoint.coordinate[y],
-                             2 * point.coordinate[y] - bestPoint.coordinate[y]])]
-                       for y in range(len(point.coordinate) - 1)]
 
         distance = [abs(bestPoint.coordinate[i] - point.coordinate[i]) for i in range(len(bestPoint.coordinate) - 1)]
         distance = sum(distance)
 
         if bestPoint.left != None:
-            bestPoint, superSphere, distance = \
-                bestPoint.left.testNearPoint(point, bestPoint, superSphere, distance)
+            bestPoint, distance = \
+                bestPoint.left.testNearPoint(point, bestPoint, distance)
         elif bestPoint.right != None:
-            bestPoint, superSphere, distance = \
-                bestPoint.right.testNearPoint(point, bestPoint, superSphere, distance)
+            bestPoint, distance = \
+                bestPoint.right.testNearPoint(point, bestPoint, distance)
 
-        bestPoint, superSphere, distance, sibling = bestPoint.findSibling(point, bestPoint, superSphere, distance)
+        bestPoint, distance, sibling = bestPoint.findSibling(point, bestPoint, distance)
         logger.debug("begin find nearest:\n\
                         bestpoint: %s,distance:%d ,sibing:%s", bestPoint.name, distance, sibling.name)
         while True:
-            bestPoint, superSphere, distance = \
-                sibling.findBestFromOneNode(point, bestPoint, superSphere, distance)
-            bestPoint, superSphere, distance = \
-                sibling.parent.testNearPoint(point, bestPoint, superSphere, distance)
+            bestPoint, distance = \
+                sibling.findBestFromOneNode(point, bestPoint, distance)
+            bestPoint, distance = \
+                sibling.parent.testNearPoint(point, bestPoint, distance)
             if sibling.parent == 'root' or sibling.parent.parent == 'root':
                 break
             sibling = sibling.parent.parent.left \
@@ -220,10 +215,10 @@ class branch:
 
         return bestPoint, distance
 
-    def findBestFromOneNode(self, targetPoint, bestPoint, superSphere, distance):
-        if self.isOverlap(superSphere) == False:
-            logger.debug("think overlap, ", self.name, "self,space:",self.space,"superSphere",superSphere)
-            return bestPoint, superSphere, distance
+    def findBestFromOneNode(self, targetPoint, bestPoint, distance):
+        if self.isOverlap(targetPoint, distance) == False:
+            logger.debug("think overlap, %s self,space: %s", self.name, self.space)
+            return bestPoint, distance
 
         selfDistance = [abs(self.coordinate[i] - targetPoint.coordinate[i]) for i in range(len(self.coordinate) - 1)]
         selfDistance = sum(selfDistance)
@@ -231,74 +226,72 @@ class branch:
         if selfDistance < distance:
             distance = selfDistance
             bestPoint = self
-            superSphere = [[min([bestPoint.coordinate[y], 2 * targetPoint.coordinate[y] - bestPoint.coordinate[y]]),
-                            max([bestPoint.coordinate[y], 2 * targetPoint.coordinate[y] - bestPoint.coordinate[y]])]
-                           for y in range(len(bestPoint.coordinate) - 1)]
 
         if self.left != None:
-            bestPoint, superSphere, distance = \
-                self.left.findBestFromOneNode(targetPoint, bestPoint, superSphere, distance)
+            bestPoint, distance = \
+                self.left.findBestFromOneNode(targetPoint, bestPoint, distance)
         if self.right != None:
-            bestPoint, superSphere, distance = \
-                self.right.findBestFromOneNode(targetPoint, bestPoint, superSphere, distance)
+            bestPoint, distance = \
+                self.right.findBestFromOneNode(targetPoint, bestPoint, distance)
 
-        return bestPoint, superSphere, distance
+        return bestPoint, distance
 
-    def testNearPoint(self, targetPoint, bestPoint, superSphere, distance):
+    def testNearPoint(self, targetPoint, bestPoint, distance):
         selfDistance = [abs(self.coordinate[i] - targetPoint.coordinate[i]) for i in range(len(self.coordinate) - 1)]
         selfDistance = sum(selfDistance)
         if selfDistance < distance:
             distance = selfDistance
             bestPoint = self
-            superSphere = [[min([bestPoint.coordinate[y], 2 * targetPoint.coordinate[y] - bestPoint.coordinate[y]]),
-                            max([bestPoint.coordinate[y], 2 * targetPoint.coordinate[y] - bestPoint.coordinate[y]])]
-                           for y in range(len(bestPoint.coordinate) - 1)]
-        return bestPoint, superSphere, distance
+        return bestPoint, distance
 
     def loopForSons(self, point):
         if self.left != None and self.left.isOverlap(point):
             self.left.testNearPoint()
 
-    def findSibling(self,point, bestPoint, superSphere, distance):
+    def findSibling(self,point, bestPoint, distance):
         ret = 'over'
         if self.parent != 'root' and self.parent.left != None and self.parent.left != self:
             logger.debug("find parent's left")
-            return bestPoint, superSphere, distance,self.parent.left
+            return bestPoint, distance,self.parent.left
         elif self.parent != 'root' and self.parent.right != None and self.parent.right != self:
             logger.debug("find parent's right")
-            return bestPoint, superSphere, distance,self.parent.right
+            return bestPoint, distance,self.parent.right
         elif self.parent != 'root':
             logger.debug("parent have no other sibling, find up layer")
-            bestPoint, superSphere, distance = self.parent.testNearPoint(point, bestPoint, superSphere, distance)
-            bestPoint, superSphere, distance, ret = self.parent.findSibling(point, bestPoint, superSphere, distance)
-        return bestPoint, superSphere, distance, ret
+            bestPoint, distance = self.parent.testNearPoint(point, bestPoint, distance)
+            bestPoint, distance, ret = self.parent.findSibling(point, bestPoint, distance)
+        return bestPoint, distance, ret
 
-    def isOverlap(self, node):
+    def isOverlap(self, point, distance):
+        def shortest(array, point):
+            if point < array[0]:
+                return array[0] - point
+            if point > array[1]:
+                return point - array[1]
+            return 0
+        thisdistance = 0
         for x in range(len(self.coordinate) - 1):
-            if (self.space[x][0] > node[x][0] and self.space[x][0] < node[x][1]) or \
-                    (self.space[x][1] > node[x][0] and self.space[x][1] < node[x][1]) or \
-                    (self.space[x][0] < node[x][0] and self.space[x][1] > node[x][1]):
-                return True
-
+            thisdistance = thisdistance + shortest(self.space[x], point.coordinate[x])
+        if thisdistance < distance:
+            return  True
         return False
 
 def test():
 
 
     dataSet = [[6, 28, 73, 55, 4, 44, 38, 29], [38, 91, 85, 25, 72, 11, 48, 0], [74, 40, 74, 50, 72, 32, 56, 77], [30, 59, 51, 61, 20, 50, 30, 54], [49, 33, 78, 24, 65, 18, 91, 71], [14, 92, 95, 59, 24, 94, 24, 26], [96, 58, 56, 56, 89, 16, 57, 25], [6, 66, 92, 4, 89, 78, 69, 73], [17, 69, 88, 62, 27, 0, 72, 65], [39, 68, 96, 41, 76, 66, 71, 19], [9, 84, 2, 48, 96, 22, 93, 95], [8, 11, 81, 11, 67, 98, 54, 56], [48, 31, 80, 68, 2, 1, 25, 87], [17, 28, 6, 46, 19, 57, 50, 67], [15, 39, 56, 20, 67, 90, 75, 37], [85, 61, 34, 71, 32, 33, 84, 81], [83, 50, 3, 41, 51, 8, 75, 89], [30, 99, 10, 89, 16, 35, 84, 17], [67, 10, 62, 31, 73, 14, 33, 3], [13, 45, 37, 60, 57, 59, 72, 68]]
-    dataSet = [[int(random() * 100) for x in range(50)] for y in range(2000)]
-
+    dataSet = [[int(random() * 100) for x in range(50)] for y in range(200000)]
 
     tree = Tree(dataSet)
     tree.root.printNode(tree.root)
 
     # tree.root.verifyTree(tree.root)
-
-
     point = branch(tree, [[82, 63, 97, 4, 26, 74, 74, 68]], type = 'test')
     point = branch(tree, [[int(random() * 100) for x in range(50)]], type = 'test')
 
+    ttime = time()
     bestPoint, distance = tree.root.findNearestPoint(tree.root, point)
+    ttime = time() - ttime
 
     space = tree.root.findPointSpace(tree.root, point)
 
@@ -314,21 +307,23 @@ def test():
     #print("point", point.name,"bestPoint:", bestPoint.name, ", distance:", distance)
     #print("real distance = ", selfDistance, coord,", space:", space.name)
     if distance == selfDistance:
-        return True
+        return True, ttime
     else:
         print(dataSet)
         print("point", point.name,"bestPoint:", bestPoint.name, ", distance:", distance,\
             "real distance = ", selfDistance, "coord",coord,"point",point.coordinate,", space:", space.name)
-        return False
+        return False, ttime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-count = 200
+count = 1
 miss = 0
+timeavg = 0
 while count > 0:
-    if False == test():
+    jug,ttime = test()
+    if False == jug:
         break
         miss = miss + 1
     count = count - 1
-
-print(miss)
+    timeavg = (ttime + timeavg)/2
+print(miss, timeavg)
